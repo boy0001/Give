@@ -1,0 +1,16 @@
+name: Grant
+main: com.empcraft.Give
+version: 0.2.1
+author: Empire92
+website: www.empcraft.com
+commands:
+   g:
+      description: Gives a player an item
+   grant:
+      description: Gives a player an item
+   o:
+      description: Grants and overwrites an item.
+   overwrite:
+      description: Grants and overwrites an item.
+   enchantments:
+      description: A list of enchantments.
