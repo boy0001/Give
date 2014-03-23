@@ -1,11 +1,13 @@
 package com.empcraft;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Map.Entry;
 
 import org.apache.commons.lang.StringUtils;
@@ -15,6 +17,7 @@ import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
@@ -57,42 +60,82 @@ public final class Give extends JavaPlugin implements Listener {
     	}
 		return hasperm;
     }
-    public Material LevensteinDistance(String string) {
-    	try {
-    		return  Material.getMaterial(Integer.parseInt(string));
+    public Object[] LevensteinDistance(String string) {
+	 	Object[] toreturn = new Object[2];
+	 	try {
+	 		toreturn[0] = new ItemStack(Integer.parseInt(string));
+	 		toreturn[1] = Material.getMaterial(Integer.parseInt(string)).toString();
+    		return  toreturn;
     	}
     	catch (Exception e) {
     		
     	}
     	string = StringUtils.replace(string.toString(), " ", "_").toUpperCase();
-    	string = StringUtils.replace(string.toString(), "SHOVEL", "SPADE");
-    	string = StringUtils.replace(string.toString(), "SLAB", "STEB");
-    	string = StringUtils.replace(string.toString(), "REPEATER", "DIODE");
-    	string = StringUtils.replace(string.toString(), "STONEBRICK", "SMOOTH_BRICK");
-    	string = StringUtils.replace(string.toString(), "STONE_BRICK", "SMOOTH_BRICK");
-    	
-    	if (string.contains("STAINED")==false) {
-	    	string = StringUtils.replace(string.toString(), "GLASSPANE", "THIN_GLASS");
-	    	string = StringUtils.replace(string.toString(), "GLASS_PANE", "THIN_GLASS");
-    	}
     	Material[] materials = Material.values();
-    	int smallest = -1;
-    	Material lastmaterial = null;
+		int smallest = -1;
+		String materialname = null;
+    	ItemStack lastmaterial = null;
+		File yamlFile = new File(getDataFolder()+File.separator+"idlist.yml");
+		YamlConfiguration yaml = YamlConfiguration.loadConfiguration(yamlFile);
+		Set<String> ids = yaml.getConfigurationSection("item-ids").getKeys(false);
+		try {
+			toreturn[1] = ""+yaml.getString("item-ids."+string.replace(":","-"));
+			toreturn[0] = new ItemStack(Integer.parseInt(string.split(":")[0]),1, Short.parseShort(string.split(":")[1]));
+			return toreturn;
+		}
+		catch (Exception e) {
+			if (string.contains(":")) {
+				try {
+					toreturn[1] = Integer.parseInt(string.split(":")[0])+":"+Integer.parseInt(string.split(":")[1]);
+					toreturn[0] = new ItemStack(Integer.parseInt(string.split(":")[0]),1, Short.parseShort(string.split(":")[1]));
+					return toreturn;
+				}
+				catch (Exception e2) {
+					
+				}
+			}
+		}
+		for (String current:ids) {
+			String itemname = yaml.getString("item-ids."+current);
+			if (smallest == -1) {
+				lastmaterial = new ItemStack(Material.AIR);
+				smallest = 100;
+			}
+			else {
+				int distance = StringUtils.getLevenshteinDistance(string.toUpperCase(), itemname.toUpperCase());
+				if (itemname.contains(string)) {
+					distance = StringUtils.getLevenshteinDistance(string.toUpperCase(), itemname.toUpperCase())-4;
+					if (distance<smallest) {
+						if (current.contains("-")) {
+							lastmaterial = new ItemStack(Integer.parseInt(current.split("-")[0]),1, Short.parseShort(current.split("-")[1]));
+						}
+						else {
+							lastmaterial = new ItemStack(Integer.parseInt(current),1, Short.parseShort("0"));
+						}
+						smallest = distance;
+						materialname=itemname;
+					}
+				}
+				else {
+					if (distance<smallest) {
+						if (current.contains("-")) {
+							lastmaterial = new ItemStack(Integer.parseInt(current.split("-")[0]),1, Short.parseShort(current.split("-")[1]));
+						}
+						else {
+							lastmaterial = new ItemStack(Integer.parseInt(current),1, Short.parseShort("0"));
+						}
+						materialname=itemname;
+						smallest = distance;
+					}
+				}
+			}
+		}
     	for (Material mymaterial:materials) {
     		String current = mymaterial.toString();
     		if (smallest == -1) {
-    			lastmaterial = mymaterial;
-    			int distance;
-    			if (current.contains(string)) {
-    				distance = StringUtils.getLevenshteinDistance(string.toUpperCase(), current)-4;
-    				if (distance==-1) {
-    					distance = 0;
-    				}
-    			}
-    			else {
-    				distance = StringUtils.getLevenshteinDistance(string.toUpperCase(), current)+Math.abs(string.length()-current.length());
-    			}
-    			smallest = distance;
+    			lastmaterial = new ItemStack(mymaterial);
+    			materialname=mymaterial.toString();
+    			smallest = 100;
     		}
     		else {
     			int distance;
@@ -106,12 +149,15 @@ public final class Give extends JavaPlugin implements Listener {
     				distance = StringUtils.getLevenshteinDistance(string.toUpperCase(), current)+Math.abs(string.length()-current.length());
     			}
     			if (distance<smallest) {
+    				materialname=mymaterial.toString();
     				smallest = distance;
-    				lastmaterial = mymaterial;
+    				lastmaterial = new ItemStack(mymaterial);
     			}
     		}
     	}
-    	return lastmaterial;
+    	toreturn[0] = lastmaterial;
+    	toreturn[1] = materialname;
+    	return toreturn;
     }
     public Player matchplayer(String arg) {
 		List<Player> matches = getServer().matchPlayer(arg);
@@ -157,10 +203,11 @@ public final class Give extends JavaPlugin implements Listener {
     
 	@Override
     public void onEnable(){
+		saveResource("idlist.yml", true);
 		getConfig().options().copyDefaults(true);
         
         final Map<String, Object> options = new HashMap<String, Object>();
-        getConfig().set("version", "0.2.1");
+        getConfig().set("version", "0.2.5");
         //TODO config
         
         options.put("overwrite",false);
@@ -202,7 +249,7 @@ public final class Give extends JavaPlugin implements Listener {
     		if (checkperm(player,"give.grant")) {
     			if (args.length>0) {
         			Player receiver = player;
-        			byte damage = 0;
+        			short damage = 0;
         			int id = 0;
         			int amount = 1;
         			String itemdb = args[0];
@@ -375,9 +422,15 @@ public final class Give extends JavaPlugin implements Listener {
         			}
         			catch (Exception e) { }
         			try {
-        				id = LevensteinDistance(itemdb).getId();
+        				Object[] result = LevensteinDistance(itemdb);
+        				
+        				id = ((ItemStack) result[0]).getTypeId();
+        				if (((ItemStack) result[0]).getDurability() > 0) {
+        					damage = ((ItemStack) result[0]).getDurability();
+        				}
         			}
         			catch (Exception e) {
+        				e.printStackTrace();
         				try {
         					id = Integer.parseInt(itemdb);
         				}
@@ -387,7 +440,7 @@ public final class Give extends JavaPlugin implements Listener {
         			}
         			try {
         				List<String> lore = new LinkedList<String>();
-        				ItemStack item = new ItemStack(id, amount, (byte) damage);
+        				ItemStack item = new ItemStack(id, amount, (short) damage);
         				if (!rename.equals("")) {
         				try {
         				ItemMeta meta = item.getItemMeta();
